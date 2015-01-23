@@ -1,4 +1,4 @@
-.PHONY: all sanity
+.PHONY: all sanity get-deps clean
 
 UNAME:=$(shell uname -s)
 
@@ -13,6 +13,8 @@ all: gochunk
 gochunk: main.go chunk.go
 	go build
 
+get-deps:
+	go get github.com/codegangsta/cli
 
 sanity: gochunk
 	./$^ c $^ | tee $^.manifest

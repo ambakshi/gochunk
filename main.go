@@ -3,6 +3,7 @@ package main
 import (
 	"compress/gzip"
 	"crypto/sha1"
+	"github.com/ambakshi/gochunk/chunk"
 	"github.com/codegangsta/cli"
 
 	"fmt"
@@ -10,36 +11,17 @@ import (
 	"os"
 )
 
-const ChunkSize = 1024 * 1024
+var (
+	chunkDir = "./gochunk"
+)
 
-func WriteChunk(buffer []byte, n int, sha1dir string, sha1sum [sha1.Size]byte) error {
-	err := os.MkdirAll(sha1dir, 0777)
+func ChunkWriteReqHandler(wq chan *ChunkWriteReq, done chan bool, errout chan error) {
+	writeReq := <-wq
+	err := WriteChunk(writeReq.buffer, writeReq.n, writeReq.sha1dir, writeReq.sha1sum)
 	if err != nil {
-		return err
+		errout <- err
 	}
-	chunkFile := fmt.Sprintf("%s/%x", sha1dir, sha1sum)
-	chunkTemp := fmt.Sprintf("%s.%d", chunkFile, os.Getpid())
-	fp0, err := os.Create(chunkTemp)
-	if err != nil {
-		return err
-	}
-
-	fp := gzip.NewWriter(fp0)
-
-	ofs, remain := 0, n
-	for remain > 0 {
-		written, err := fp.Write(buffer[ofs:remain])
-		if err != nil {
-			fp.Close()
-			return err
-		}
-		remain -= written
-		ofs += written
-	}
-
-	fp.Close()
-	err = os.Rename(chunkTemp, chunkFile)
-	return err
+	done <- true
 }
 
 func main() {
@@ -49,7 +31,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "dir, d",
-			Value:  "./",
+			Value:  chunkDir,
 			Usage:  "directory to read/write chunks from",
 			EnvVar: "GOCHUNK_DIR",
 		},
@@ -68,6 +50,7 @@ func main() {
 					defer fp.Close()
 
 					buffer := make([]byte, ChunkSize)
+					wq := make(chan *ChunkWriteReq, 5)
 					for {
 						n, err := fp.Read(buffer)
 						if err != nil && err != io.EOF {
@@ -79,7 +62,15 @@ func main() {
 						sha1sum := sha1.Sum(buffer[:n])
 						sha1dir := fmt.Sprintf("%02x/%02x/%02x", sha1sum[0], sha1sum[1], sha1sum[2])
 						werr := WriteChunk(buffer, n, sha1dir, sha1sum)
-						fmt.Printf("%x %s\n", sha1sum, fileName)
+
+						cwrite := &ChunkWriteReq{
+							n:       n,
+							buffer:  buffer,
+							sha1sum: sha1sum,
+							sha1dir: sha1dir,
+						}
+
+						fmt.Printf("%x\t%s\n", sha1sum, fileName)
 						if werr != nil {
 							panic(werr)
 						}

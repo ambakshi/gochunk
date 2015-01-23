@@ -1,5 +1,13 @@
 package main
 
+import (
+	"compress/gzip"
+	"crypto/sha1"
+
+	"fmt"
+	"os"
+)
+
 const ChunkSize = 1024 * 1024
 
 type ChunkWriteReq struct {
@@ -10,11 +18,21 @@ type ChunkWriteReq struct {
 }
 
 // Writer interface
-func (c *Chunk) Write(p []byte) (int, error) {
+func (c *ChunkWriteReq) Write(p []byte) (int, error) {
 	return 0, nil
 }
 
-func (c *Chunk) Close() error {
+func (c *ChunkWriteReq) Close() error {
+	return nil
+}
+
+func ChunkWriteReqHandler(wq chan *ChunkWriteReq, done chan bool, errout chan error) {
+	writeReq := <-wq
+	err := WriteChunk(writeReq.buffer, writeReq.n, writeReq.sha1dir, writeReq.sha1sum)
+	if err != nil {
+		errout <- err
+	}
+	done <- true
 }
 
 func WriteChunk(buffer []byte, n int, sha1dir string, sha1sum [sha1.Size]byte) error {

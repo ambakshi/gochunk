@@ -1,28 +1,18 @@
 package main
 
 import (
-	"compress/gzip"
 	"crypto/sha1"
-	"github.com/ambakshi/gochunk/chunk"
 	"github.com/codegangsta/cli"
 
 	"fmt"
 	"io"
 	"os"
+	"path"
 )
 
 var (
-	chunkDir = "./gochunk"
+	chunkDir = "./chunks/"
 )
-
-func ChunkWriteReqHandler(wq chan *ChunkWriteReq, done chan bool, errout chan error) {
-	writeReq := <-wq
-	err := WriteChunk(writeReq.buffer, writeReq.n, writeReq.sha1dir, writeReq.sha1sum)
-	if err != nil {
-		errout <- err
-	}
-	done <- true
-}
 
 func main() {
 	app := cli.NewApp()
@@ -60,20 +50,21 @@ func main() {
 							break
 						}
 						sha1sum := sha1.Sum(buffer[:n])
-						sha1dir := fmt.Sprintf("%02x/%02x/%02x", sha1sum[0], sha1sum[1], sha1sum[2])
-						werr := WriteChunk(buffer, n, sha1dir, sha1sum)
+						sha1dir := path.Join(
+							chunkDir,
+							fmt.Sprintf("%02x/%02x/%02x", sha1sum[0], sha1sum[1], sha1sum[2]))
+						_ = WriteChunk(buffer, n, sha1dir, sha1sum)
 
-						cwrite := &ChunkWriteReq{
+						wq <- &ChunkWriteReq{
 							n:       n,
 							buffer:  buffer,
 							sha1sum: sha1sum,
 							sha1dir: sha1dir,
 						}
 
+						// ChunkWriteReqHandler(wq, done, errout)
+
 						fmt.Printf("%x\t%s\n", sha1sum, fileName)
-						if werr != nil {
-							panic(werr)
-						}
 
 						if err == io.EOF {
 							break

@@ -6,8 +6,11 @@ import (
 
 	"fmt"
 	"io"
+	"log"
+	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 )
 
 var (
@@ -28,9 +31,29 @@ func main() {
 	}
 	app.Commands = []cli.Command{
 		{
+			Name:      "serve",
+			ShortName: "s",
+			Action: func(c *cli.Context) {
+				// fs := http.FileServer(http.Dir(chunkDir))
+				// http.Handle("/", fs)
+				// log.Fatal(http.ListenAndServe(":3000", nil))
+				serveDir, err := filepath.Abs(chunkDir)
+				if err != nil {
+					panic(err)
+				}
+				http.Handle("/chunks/", http.StripPrefix("/chunks/",
+					http.FileServer(http.Dir(serveDir))))
+				err = http.ListenAndServe(":9999", nil)
+				if nil != err {
+					panic(err)
+				}
+			},
+		},
+		{
 			Name:      "chop",
 			ShortName: "c",
 			Action: func(c *cli.Context) {
+
 				for _, fileName := range c.Args() {
 					fp, err := os.Open(fileName)
 					if err != nil {
@@ -41,6 +64,24 @@ func main() {
 
 					buffer := make([]byte, ChunkSize)
 					wq := make(chan *ChunkWriteReq, 5)
+					done := make(chan bool)
+
+					go func() {
+						for {
+							select {
+							case _, cwr_ok := <-wq:
+								if !cwr_ok {
+									return // channel closed unexpectedly
+								}
+							case donesig, done_ok := <-done:
+								if done_ok && donesig {
+									log.Println("All done")
+									return
+								}
+							}
+						}
+					}()
+
 					for {
 						n, err := fp.Read(buffer)
 						if err != nil && err != io.EOF {
@@ -70,6 +111,7 @@ func main() {
 							break
 						}
 					}
+					done <- true
 				}
 			},
 		},

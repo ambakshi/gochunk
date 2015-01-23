@@ -1,5 +1,6 @@
 ### gochunk
 
+[![Build Status](https://travis-ci.org/ambakshi/gochunk.svg?branch=master)](https://travis-ci.org/ambakshi/gochunk)
 
 #### chop
 

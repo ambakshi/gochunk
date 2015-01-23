@@ -1,2 +1,5 @@
 gochunk
 chunks/
+*.manifest
+*.chk
+.build/
